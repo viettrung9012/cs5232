@@ -4,33 +4,134 @@
 #define opened 1;
 #define dark 0;
 #define bright 1;
+#define obstaclePosition 1000;
+#define	max_speed 200;
+#define min_speed 0;
+#define acceleration 30;
+#define break_deceleration 90;
+#define normal_deceleration 10;
 
 var engineState = off;
 var doorState = closed;
 var daylight = bright;
-var alarmState = off;
+var unsafeDoorAlarm = off;
+var obstacleAheadAlarm = off;
 var headlightState = off;
-var internallightState = off;
-var timeCounter = 0;
+var internalLightState = off;
+var timeCounterOpen = 0;
+var timeCounterClose = 0;
+var distance = 0;
+var collided = false;
+var speed = min_speed;
 
-door = 	[doorState == closed]open{doorState = opened;} -> door
-	   	[]
-		[doorState == opened]close{doorState = closed;} -> door;
-
-engine =	[engineState == off]start{engineState = on;} -> engine
-			[]
-			[engineState == on]stop{engineState = off;} ->engine;
-
-head_light =	[daylight == dark]ON{headlightState = on;} -> head_light
-				[]
-				[daylight == bright]OFF{headlightState = off;} -> head_light;
-
-day =	[daylight == bright]time_passes{daylight = dark} -> day
+door = 	[doorState == closed && daylight == bright]open{
+			doorState = opened;
+			timeCounterClose = 0;
+		} -> door
 		[]
-		[daylight == dark]time_passes{daylight = bright} -> day;
+		[doorState == closed && daylight == dark]open{
+			doorState = opened;
+			timeCounterClose = 0;
+			if (engineState == off){
+				internalLightState = on;
+				timeCounterOpen = 0;
+			}
+		} -> door
+		[]
+		[doorState == opened && internalLightState == on && timeCounterOpen < 20]wait{
+			timeCounterOpen++;
+		} -> door
+	   	[]
+	   	[doorState == opened && internalLightState == on && timeCounterOpen >= 20]internal_light_OFF{
+	   		internalLightState = off;
+	   		timeCounterOpen = 0;
+	   	} -> door
+	   	[]
+		[doorState == opened]close{
+			doorState = closed;
+			unsafeDoorAlarm = off;
+			timeCounterOpen = 0;
+			if (engineState == off){
+				internalLightState = on;
+				timeCounterClose = 0;
+			}
+		} -> door
+		[]
+		[doorState == closed && internalLightState == on && timeCounterClose < 10]wait{
+			timeCounterClose++;
+		} -> door
+		[]
+		[doorState == closed && internalLightState == on && timeCounterClose >= 10]internal_light_OFF{
+			internalLightState = off;
+			timeCounterClose = 0;
+		} -> door;
+
+engine =			[engineState == off]start{
+						if (distance + speed + acceleration > (obstaclePosition - break_deceleration)) engineState = off;
+						else engineState = on;
+						if (doorState == opened) unsafeDoorAlarm = on;
+						internalLightState = off;
+					} -> engine
+					[]
+					[engineState == on && unsafeDoorAlarm == off && obstacleAheadAlarm == off]move{
+						speed = speed + acceleration;
+						if (speed > max_speed) speed = max_speed;
+						distance = distance + speed;
+						var distanceFromObstacle = obstaclePosition - distance;
+						var nextSpeed = speed + acceleration;
+						var timeToStop = nextSpeed / break_deceleration;
+						if (nextSpeed % break_deceleration != 0){
+							timeToStop++;
+						}
+						if (timeToStop % 2 == 0) timeToStop = timeToStop / 2;
+						else timeToStop = timeToStop / 2 + 1;
+						if (nextSpeed * timeToStop >= (distanceFromObstacle - break_deceleration)) obstacleAheadAlarm = on;
+					} -> engine
+					[]
+					[engineState == on && obstacleAheadAlarm == on]break{
+						speed = speed - break_deceleration;
+						if (speed < min_speed) {speed = min_speed; obstacleAheadAlarm = off; engineState = off;}
+						distance = distance + speed;
+						if (distance > obstaclePosition) collided = true;
+					} -> engine
+					[]
+					[engineState == off && speed > 0]inertia_moving{
+						speed = speed - normal_deceleration;
+						if (speed < 0) speed = 0;
+						distance = distance + speed;
+						if (distance > obstaclePosition) collided = true;
+					} -> engine
+					[]
+					[engineState == on]stop{
+						if (obstacleAheadAlarm != on) engineState = off;
+						else engineState = on;
+						unsafeDoorAlarm = off
+					} -> engine;
+
+day =	[daylight == bright]time_passes{daylight = dark; headlightState = on;} -> day
+		[]
+		[daylight == dark]time_passes{daylight = bright; headlightState = off;} -> day;
 
 environment = day;
 
-car =     (engine || door || head_light /* || internal_light || alarm*/);
+car = (engine || door);
 
-system = environment || car;
+system = day || car;
+
+#define collideWhenObstacleAheadAlarmOn (obstacleAheadAlarm == on && collided == true);
+#define collideWithObstacle (collided == true);
+#define internalLightOnWhenEngineOn (internalLightState == on && engineState == on);
+#define movingWhenAlarmOn (speed > 0 && (obstacleAheadAlarm == on || unsafeDoorAlarm == on));
+#define headlightOnWhenBright (daylight == bright && headlightState == on);
+#define headlightOffWhenDark (daylight == dark && headlightState == off);
+
+#assert system deadlockfree;
+#assert system divergencefree;
+#assert system deterministic;
+#assert system nonterminating;
+#assert system reaches collideWhenObstacleAheadAlarmOn;
+#assert system reaches collideWithObstacle;
+#assert system reaches internalLightOnWhenEngineOn;
+#assert system reaches movingWhenAlarmOn;
+#assert system reaches headlightOnWhenBright;
+#assert system reaches headlightOffWhenDark;
