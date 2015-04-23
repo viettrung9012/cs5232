@@ -11,14 +11,26 @@ var daylight = bright;
 var alarmState = off;
 var headlightState = off;
 var internallightState = off;
+var timeCounter = 0;
 
-door() = {if (doorState == closed) doorState = opened; else doorState = closed;} -> door();
+door = 	[doorState == closed]open{doorState = opened;} -> door
+	   	[]
+		[doorState == opened]close{doorState = closed;} -> door;
 
-engine() = {if (engineState == off) engineState = on; else engineState = off;} -> engine();
+engine =	[engineState == off]start{engineState = on;} -> engine
+			[]
+			[engineState == on]stop{engineState = off;} ->engine;
 
-day() = {if (daylight == bright) daylight = dark; else daylight = bright;} -> day();
+head_light =	[daylight == dark]ON{headlightState = on;} -> head_light
+				[]
+				[daylight == bright]OFF{headlightState = off;} -> head_light;
 
-environment = day();
-car =     (engine() || door() /* || head_light() || internal_light() || alarm()*/);
+day =	[daylight == bright]time_passes{daylight = dark} -> day
+		[]
+		[daylight == dark]time_passes{daylight = bright} -> day;
+
+environment = day;
+
+car =     (engine || door || head_light /* || internal_light || alarm*/);
 
 system = environment || car;
