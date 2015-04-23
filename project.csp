@@ -1,0 +1,24 @@
+﻿#define off 0;
+#define on 1;
+#define closed 0;
+#define opened 1;
+#define dark 0;
+#define bright 1;
+
+var engineState = off;
+var doorState = closed;
+var daylight = bright;
+var alarmState = off;
+var headlightState = off;
+var internallightState = off;
+
+door() = {if (doorState == closed) doorState = opened; else doorState = closed;} -> door();
+
+engine() = {if (engineState == off) engineState = on; else engineState = off;} -> engine();
+
+day() = {if (daylight == bright) daylight = dark; else daylight = bright;} -> day();
+
+environment = day();
+car =     (engine() || door() /* || head_light() || internal_light() || alarm()*/);
+
+system = environment || car;
