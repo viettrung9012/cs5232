@@ -8,7 +8,7 @@
 #define	max_speed 200;
 #define min_speed 0;
 #define acceleration 30;
-#define break_deceleration 90;
+#define brake_deceleration 90;
 #define normal_deceleration 10;
 
 var engineState = off;
@@ -67,7 +67,7 @@ door = 	[doorState == closed && daylight == bright]open{
 		} -> door;
 
 engine =			[engineState == off]start{
-						if (distance + speed + acceleration > (obstaclePosition - break_deceleration)) engineState = off;
+						if (distance + speed + acceleration > (obstaclePosition - brake_deceleration)) engineState = off;
 						else engineState = on;
 						if (doorState == opened) unsafeDoorAlarm = on;
 						internalLightState = off;
@@ -79,17 +79,17 @@ engine =			[engineState == off]start{
 						distance = distance + speed;
 						var distanceFromObstacle = obstaclePosition - distance;
 						var nextSpeed = speed + acceleration;
-						var timeToStop = nextSpeed / break_deceleration;
-						if (nextSpeed % break_deceleration != 0){
+						var timeToStop = nextSpeed / brake_deceleration;
+						if (nextSpeed % brake_deceleration != 0){
 							timeToStop++;
 						}
 						if (timeToStop % 2 == 0) timeToStop = timeToStop / 2;
 						else timeToStop = timeToStop / 2 + 1;
-						if (nextSpeed * timeToStop >= (distanceFromObstacle - break_deceleration)) obstacleAheadAlarm = on;
+						if (nextSpeed * timeToStop >= (distanceFromObstacle - brake_deceleration)) obstacleAheadAlarm = on;
 					} -> engine
 					[]
-					[engineState == on && obstacleAheadAlarm == on]break{
-						speed = speed - break_deceleration;
+					[engineState == on && obstacleAheadAlarm == on]brake{
+						speed = speed - brake_deceleration;
 						if (speed < min_speed) {speed = min_speed; obstacleAheadAlarm = off; engineState = off;}
 						distance = distance + speed;
 						if (distance > obstaclePosition) collided = true;
@@ -116,7 +116,7 @@ environment = day;
 
 car = (engine || door);
 
-system = day || car;
+system = environment || car;
 
 #define collideWhenObstacleAheadAlarmOn (obstacleAheadAlarm == on && collided == true);
 #define collideWithObstacle (collided == true);
@@ -124,6 +124,8 @@ system = day || car;
 #define movingWhenAlarmOn (speed > 0 && (obstacleAheadAlarm == on || unsafeDoorAlarm == on));
 #define headlightOnWhenBright (daylight == bright && headlightState == on);
 #define headlightOffWhenDark (daylight == dark && headlightState == off);
+#define exceedMaxSpeed (speed > max_speed);
+#define negativeSpeed (speed < min_speed);
 
 #assert system deadlockfree;
 #assert system divergencefree;
@@ -135,3 +137,5 @@ system = day || car;
 #assert system reaches movingWhenAlarmOn;
 #assert system reaches headlightOnWhenBright;
 #assert system reaches headlightOffWhenDark;
+#assert system reaches exceedMaxSpeed;
+#assert system reaches negativeSpeed;
